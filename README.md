@@ -69,3 +69,4 @@ Project: Mental Health & Productivity 2026 Analysis
     <img src="https://img.shields.io/badge/GitHub-View_Repository-gray?style=for-the-badge&logo=github" alt="GitHub">
   </a>
 </p>
+<img width="1919" height="1138" alt="image" src="https://github.com/user-attachments/assets/8f69e7b9-93d7-4eec-9109-7460f410fbe8" />
