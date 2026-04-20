@@ -1,711 +1,830 @@
-"""
-Mental Health & Productivity 2026 - Streamlit Application
-Author: Mariana Gutierrez Restrepo
-Course: Ingeniería de Datos
-"""
-
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
-import os
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
-import warnings
-warnings.filterwarnings('ignore')
+import plotly.figure_factory as ff
 
+# Configuración de la página
 st.set_page_config(
-    page_title="Mental Health & Productivity 2026",
+    page_title="Mental Health & Productivity Dashboard",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# Cargar datos
 @st.cache_data
 def load_data():
-    local_file = "cleaned_dataset.csv"
-    
-    if os.path.exists(local_file):
-        try:
-            df = pd.read_csv(local_file)
-            if "productivity_level" not in df.columns:
-                df["productivity_level"] = pd.cut(
-                    df["Productivity_Score"],
-                    bins=[-1, 40, 70, 100],
-                    labels=["Baja", "Media", "Alta"]
-                )
-            return df
-        except Exception as e:
-            st.warning(f"Error reading local file: {e}")
-    
-    try:
-        import kagglehub
-        with st.spinner('Descargando dataset de Kaggle...'):
-            path = kagglehub.dataset_download("shadab80k/mental-health-productivity-2026")
-            df = pd.read_csv(path + "/mental_health_productivity_2026.csv")
-            
-            df["productivity_level"] = pd.cut(
-                df["Productivity_Score"],
-                bins=[-1, 40, 70, 100],
-                labels=["Baja", "Media", "Alta"]
-            )
-            
-            df.to_csv(local_file, index=False)
-            return df
-    except Exception as e:
-        st.error(f"Error descargando datos: {e}")
-    
-    np.random.seed(42)
-    n_samples = 1500
-    
-    countries = ["USA", "UK", "Germany", "Brazil", "Australia", "France", "Singapore", "India", "Japan", "Canada"]
-    industries = ["Manufacturing", "Finance", "Tech", "Retail", "Education", "Healthcare"]
-    work_modes = ["Remote", "On-site", "Hybrid"]
-    genders = ["Male", "Female", "Non-binary"]
-    burnout_risks = ["Low", "Medium", "High"]
-    mental_health_support = ["Yes", "No"]
-    
-    data = {
-        "Employee_ID": [f"EMP_{str(i).zfill(4)}" for i in range(1, n_samples + 1)],
-        "Age": np.random.randint(22, 60, n_samples),
-        "Gender": np.random.choice(genders, n_samples),
-        "Country": np.random.choice(countries, n_samples),
-        "Industry": np.random.choice(industries, n_samples),
-        "Work_Mode": np.random.choice(work_modes, n_samples),
-        "Work_Hours_Per_Week": np.random.randint(30, 65, n_samples),
-        "Stress_Level": np.random.randint(1, 11, n_samples),
-        "Sleep_Hours": np.random.randint(4, 11, n_samples),
-        "Productivity_Score": np.random.randint(40, 101, n_samples),
-        "Physical_Activity_Hours": np.random.uniform(0, 10, n_samples).round(1),
-        "Mental_Health_Support_Access": np.random.choice(mental_health_support, n_samples),
-        "Burnout_Risk": np.random.choice(burnout_risks, n_samples)
-    }
-    
-    df = pd.DataFrame(data)
-    df["productivity_level"] = pd.cut(
-        df["Productivity_Score"],
-        bins=[-1, 40, 70, 100],
-        labels=["Baja", "Media", "Alta"]
-    )
-    
-    st.info("ℹ️ Usando datos de ejemplo para demostración.")
+    df = pd.read_csv("data/cleaned_dataset.csv")
     return df
 
-def apply_filters(df):
-    st.sidebar.header("🔍 Filtros")
-    
-    countries = ["Todos"] + sorted(df["Country"].unique().tolist())
-    selected_country = st.sidebar.selectbox("País", countries)
-    
-    industries = ["Todos"] + sorted(df["Industry"].unique().tolist())
-    selected_industry = st.sidebar.selectbox("Industria", industries)
-    
-    work_modes = ["Todos"] + sorted(df["Work_Mode"].unique().tolist())
-    selected_work_mode = st.sidebar.selectbox("Modo de Trabajo", work_modes)
-    
-    genders = ["Todos"] + sorted(df["Gender"].unique().tolist())
-    selected_gender = st.sidebar.selectbox("Género", genders)
-    
-    burnout_risks = ["Todos"] + sorted(df["Burnout_Risk"].unique().tolist())
-    selected_burnout = st.sidebar.selectbox("Riesgo de Burnout", burnout_risks)
-    
-    min_age, max_age = int(df["Age"].min()), int(df["Age"].max())
-    age_range = st.sidebar.slider("Rango de Edad", min_age, max_age, (min_age, max_age))
-    
-    min_stress, max_stress = int(df["Stress_Level"].min()), int(df["Stress_Level"].max())
-    stress_range = st.sidebar.slider("Nivel de Estrés", min_stress, max_stress, (min_stress, max_stress))
-    
-    filtered_df = df.copy()
-    
-    if selected_country != "Todos":
-        filtered_df = filtered_df[filtered_df["Country"] == selected_country]
-    if selected_industry != "Todos":
-        filtered_df = filtered_df[filtered_df["Industry"] == selected_industry]
-    if selected_work_mode != "Todos":
-        filtered_df = filtered_df[filtered_df["Work_Mode"] == selected_work_mode]
-    if selected_gender != "Todos":
-        filtered_df = filtered_df[filtered_df["Gender"] == selected_gender]
-    if selected_burnout != "Todos":
-        filtered_df = filtered_df[filtered_df["Burnout_Risk"] == selected_burnout]
-    
-    filtered_df = filtered_df[(filtered_df["Age"] >= age_range[0]) & (filtered_df["Age"] <= age_range[1])]
-    filtered_df = filtered_df[(filtered_df["Stress_Level"] >= stress_range[0]) & (filtered_df["Stress_Level"] <= stress_range[1])]
-    
-    return filtered_df
+df = load_data()
 
-def home_page():
-    st.title("🧠 Mental Health & Productivity 2026")
-    st.markdown("---")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.markdown("""
-        ## Bienvenido al Dashboard de Análisis
-        
-        Esta aplicación analiza la relación entre la **salud mental** de los empleados y su **productividad laboral**.
-        
-        ### Características del Dataset:
-        - **1,000+ empleados** de múltiples países
-        - Variables: edad, género, industria, modo de trabajo, nivel de estrés, horas de sueño, productividad, actividad física, riesgo de burnout
-        - Análisis geográfico, estadístico y predictivo
-        
-        ### Objetivos del Análisis:
-        1. Explorar patrones entre bienestar mental y rendimiento laboral
-        2. Identificar factores de riesgo de burnout
-        3. Predecir niveles de productividad
-        4. Visualizar distribución geográfica de empleados
-        """)
-    
-    with col2:
-        st.info("👈 Use el menú lateral para navegar entre las diferentes secciones del análisis.")
-    
-    st.markdown("---")
-    st.markdown("**Autor:** Mariana Gutierrez Restrepo | **Curso:** Ingeniería de Datos")
+# Sidebar de navegación
+st.sidebar.title("🧠 Mental Health Analytics")
+st.sidebar.markdown("---")
 
-def data_overview_page(df):
-    st.title("📊 Resumen de Datos")
+page = st.sidebar.radio(
+    "Navegación",
+    ["Dashboard", "Análisis Exploratorio", "Análisis Predictivo", "Orquestación de Datos"]
+)
+
+# ==================== DASHBOARD ====================
+if page == "Dashboard":
+    st.title("📊 Dashboard General")
     st.markdown("---")
-    
+
+    # KPIs principales
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         st.metric("Total Empleados", len(df))
+
     with col2:
-        st.metric("Países", df["Country"].nunique())
+        avg_stress = df["Stress_Level"].mean()
+        st.metric("Estrés Promedio", f"{avg_stress:.1f}")
+
     with col3:
-        st.metric("Industrias", df["Industry"].nunique())
+        avg_sleep = df["Sleep_Hours"].mean()
+        st.metric("Horas Sueño Promedio", f"{avg_sleep:.1f}")
+
     with col4:
-        st.metric("Productividad Promedio", f"{df['Productivity_Score'].mean():.1f}")
-    
-    st.markdown("### Estructura del Dataset")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### Primeras Filas")
-        st.dataframe(df.head(10), use_container_width=True)
-    
-    with col2:
-        st.markdown("#### Información de Columnas")
-        info_df = pd.DataFrame({
-            "Columna": df.columns,
-            "Tipo": df.dtypes.values,
-            "No Nulos": df.notna().sum().values,
-            "Únicos": df.nunique().values
-        })
-        st.dataframe(info_df, use_container_width=True)
-    
-    st.markdown("### Estadísticas Descriptivas")
-    
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    st.dataframe(df[numeric_cols].describe(), use_container_width=True)
+        avg_productivity = df["Productivity_Score"].mean()
+        st.metric("Productividad Promedio", f"{avg_productivity:.1f}")
 
-def descriptive_graphics_page(df):
-    st.title("📈 Gráficos Descriptivos")
     st.markdown("---")
-    
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Histogramas", "Distribuciones", "Correlación", "Scatter Plots", "Box Plots", "Pair Plots"
-    ])
-    
-    with tab1:
-        st.subheader("Histogramas de Variables Numéricas")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            fig = px.histogram(df, x="Age", nbins=20, title="Distribución de Edad", 
-                              color_discrete_sequence=["#6366f1"])
-            fig.update_layout(bargap=0.1)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.histogram(df, x="Work_Hours_Per_Week", nbins=15, title="Horas de Trabajo Semanales",
-                              color_discrete_sequence=["#10b981"])
-            fig.update_layout(bargap=0.1)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col3:
-            fig = px.histogram(df, x="Sleep_Hours", nbins=15, title="Horas de Sueño",
-                              color_discrete_sequence=["#f59e0b"])
-            fig.update_layout(bargap=0.1)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.histogram(df, x="Stress_Level", nbins=10, title="Nivel de Estrés",
-                              color_discrete_sequence=["#ef4444"])
-            fig.update_layout(bargap=0.1)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.histogram(df, x="Productivity_Score", nbins=20, title="Puntuación de Productividad",
-                              color_discrete_sequence=["#8b5cf6"])
-            fig.update_layout(bargap=0.1)
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with tab2:
-        st.subheader("Distribuciones de Variables Categóricas")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.pie(df, names="productivity_level", title="Nivel de Productividad",
-                        color_discrete_sequence=px.colors.qualitative.Set2)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.pie(df, names="Burnout_Risk", title="Riesgo de Burnout",
-                        color_discrete_sequence=px.colors.qualitative.Reds_r)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.histogram(df, x="Gender", title="Distribución por Género", 
-                              color_discrete_sequence=["#06b6d4"])
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.histogram(df, x="Work_Mode", title="Modo de Trabajo",
-                              color_discrete_sequence=["#84cc16"])
-            st.plotly_chart(fig, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.histogram(df, x="Industry", title="Distribución por Industria",
-                              color_discrete_sequence=["#f97316"])
-            fig.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.histogram(df, x="Country", title="Distribución por País",
-                              color_discrete_sequence=["#ec4899"])
-            fig.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with tab3:
-        st.subheader("Mapa de Correlación")
-        
-        numeric_df = df.select_dtypes(include=[np.number])
-        correlation_matrix = numeric_df.corr()
-        
-        fig = px.imshow(
-            correlation_matrix,
-            text_auto=".2f",
-            aspect="auto",
-            color_continuous_scale="RdBu_r",
-            title="Matriz de Correlación"
+
+    # Filtros interactivos
+    st.subheader("🔍 Filtros Interactivos")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        stress_filter = st.multiselect(
+            "Nivel de Estrés",
+            options=sorted(df["Stress_Level"].unique()),
+            default=sorted(df["Stress_Level"].unique())
         )
-        fig.update_layout(height=600)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.subheader("Correlaciones con Productividad")
-        productivity_corr = correlation_matrix["Productivity_Score"].sort_values(ascending=False)
-        corr_df = pd.DataFrame({
-            "Variable": productivity_corr.index,
-            "Correlación": productivity_corr.values
-        })
-        fig = px.bar(corr_df, x="Variable", y="Correlación", title="Correlaciones con Productividad",
-                    color="Correlación", color_continuous_scale="RdBu_r")
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with tab4:
-        st.subheader("Diagramas de Dispersión")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.scatter(df, x="Sleep_Hours", y="Productivity_Score",
-                           color="productivity_level", title="Sueño vs Productividad",
-                           trendline="ols", color_discrete_sequence=px.colors.qualitative.Bold)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.scatter(df, x="Stress_Level", y="Productivity_Score",
-                           color="Burnout_Risk", title="Estrés vs Productividad",
-                           trendline="ols", color_discrete_sequence=px.colors.qualitative.Reds_r)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.scatter(df, x="Work_Hours_Per_Week", y="Productivity_Score",
-                           color="Work_Mode", title="Horas de Trabajo vs Productividad",
-                           trendline="ols")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.scatter(df, x="Age", y="Productivity_Score",
-                           color="Gender", title="Edad vs Productividad",
-                           trendline="ols")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.scatter(df, x="Physical_Activity_Hours", y="Productivity_Score",
-                           title="Actividad Física vs Productividad", trendline="ols",
-                           color_discrete_sequence=["#10b981"])
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.scatter(df, x="Stress_Level", y="Sleep_Hours",
-                           color="productivity_level", title="Estrés vs Sueño",
-                           trendline="ols")
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with tab5:
-        st.subheader("Diagramas de Caja (Box Plots)")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.box(df, x="productivity_level", y="Productivity_Score",
-                        title="Productividad por Nivel", color="productivity_level")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.box(df, x="Burnout_Risk", y="Productivity_Score",
-                        title="Productividad por Riesgo de Burnout", color="Burnout_Risk")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.box(df, x="Work_Mode", y="Productivity_Score",
-                        title="Productividad por Modo de Trabajo", color="Work_Mode")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.box(df, x="Industry", y="Productivity_Score",
-                        title="Productividad por Industria", color="Industry")
-            fig.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.box(df, x="Gender", y="Stress_Level", title="Estrés por Género", color="Gender")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.box(df, x="Burnout_Risk", y="Sleep_Hours", title="Sueño por Riesgo de Burnout", 
-                        color="Burnout_Risk")
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with tab6:
-        st.subheader("Pair Plots")
-        
-        selected_cols = st.multiselect(
-            "Seleccione variables para Pair Plot",
-            options=numeric_cols,
-            default=["Age", "Stress_Level", "Sleep_Hours", "Productivity_Score", "Work_Hours_Per_Week"]
+
+    with col2:
+        productivity_filter = st.multiselect(
+            "Nivel de Productividad",
+            options=df["productivity_level"].unique(),
+            default=df["productivity_level"].unique()
         )
-        
-        if selected_cols:
-            fig = px.scatter_matrix(df[selected_cols], 
-                                   dimensions=selected_cols,
-                                   color="productivity_level",
-                                   title="Pair Plot de Variables Seleccionadas")
-            fig.update_layout(height=800)
-            st.plotly_chart(fig, use_container_width=True)
 
-def geographic_map_page(df):
-    st.title("🗺️ Mapa Geográfico")
+    with col3:
+        burnout_filter = st.multiselect(
+            "Riesgo de Burnout",
+            options=df["Burnout_Risk"].unique(),
+            default=df["Burnout_Risk"].unique()
+        )
+
+    # Aplicar filtros
+    filtered_df = df[
+        (df["Stress_Level"].isin(stress_filter)) &
+        (df["productivity_level"].isin(productivity_filter)) &
+        (df["Burnout_Risk"].isin(burnout_filter))
+    ]
+
+    st.markdown(f"**Registros filtrados:** {len(filtered_df)}")
+
+    # Tabla de datos
+    st.subheader("📋 Tabla de Datos")
+    st.dataframe(filtered_df, use_container_width=True)
+
+    # Visualizaciones principales
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Histograma de Estrés
+        fig_stress = px.histogram(
+            filtered_df,
+            x="Stress_Level",
+            nbins=10,
+            title="Distribución de Niveles de Estrés",
+            color_discrete_sequence=["#FF6B6B"]
+        )
+        fig_stress.update_layout(showlegend=False)
+        st.plotly_chart(fig_stress, use_container_width=True)
+
+        # Scatter: Sleep vs Productivity
+        fig_sleep_prod = px.scatter(
+            filtered_df,
+            x="Sleep_Hours",
+            y="Productivity_Score",
+            color="Stress_Level",
+            title="Horas de Sueño vs Productividad",
+            color_continuous_scale="RdYlBu_r"
+        )
+        st.plotly_chart(fig_sleep_prod, use_container_width=True)
+
+    with col2:
+        # Histograma de Productividad
+        fig_prod = px.histogram(
+            filtered_df,
+            x="Productivity_Score",
+            nbins=20,
+            title="Distribución de Scores de Productividad",
+            color="productivity_level",
+            color_discrete_map={"Baja": "#FF9999", "Media": "#FFD700", "Alta": "#90EE90"}
+        )
+        st.plotly_chart(fig_prod, use_container_width=True)
+
+        # Boxplot Stress por Burnout
+        fig_box = px.box(
+            filtered_df,
+            x="Burnout_Risk",
+            y="Stress_Level",
+            color="Burnout_Risk",
+            title="Nivel de Estrés por Riesgo de Burnout"
+        )
+        st.plotly_chart(fig_box, use_container_width=True)
+
+    # Matriz de correlación
+    st.subheader("🔗 Matriz de Correlación")
+    numeric_cols = ["Age", "Work_Hours_Per_Week", "Stress_Level", "Sleep_Hours",
+                    "Productivity_Score", "Physical_Activity_Hours"]
+
+    corr_matrix = filtered_df[numeric_cols].corr()
+
+    fig_corr = go.Figure(data=go.Heatmap(
+        z=corr_matrix.values,
+        x=corr_matrix.columns,
+        y=corr_matrix.columns,
+        colorscale="RdBu_r",
+        zmin=-1, zmax=1,
+        text=corr_matrix.round(2).values,
+        texttemplate="%{text}",
+        textfont={"size": 10}
+    ))
+    fig_corr.update_layout(title="Correlación entre Variables Numéricas")
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+# ==================== ANÁLISIS EXPLORATORIO ====================
+elif page == "Análisis Exploratorio":
+    st.title("🔍 Análisis Exploratorio de Datos (EDA)")
     st.markdown("---")
-    
-    st.subheader("Distribución de Empleados por País")
-    
-    country_counts = df["Country"].value_counts().reset_index()
-    country_counts.columns = ["Country", "Count"]
-    
-    fig = px.bar(country_counts, x="Country", y="Count", 
-                 title="Número de Empleados por País",
-                 color="Count", color_continuous_scale="Viridis")
-    fig.update_layout(xaxis_tickangle=-45)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.subheader("Productividad por País")
-    
-    country_productivity = df.groupby("Country").agg({
-        "Productivity_Score": "mean",
-        "Employee_ID": "count"
-    }).reset_index()
-    country_productivity.columns = ["Country", "Avg_Productivity", "Employee_Count"]
-    
-    fig = px.bar(country_productivity, x="Country", y="Avg_Productivity",
-                 title="Productividad Promedio por País",
-                 color="Avg_Productivity", color_continuous_scale="RdYlGn")
-    fig.update_layout(xaxis_tickangle=-45, yaxis_title="Productividad Promedio")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Estrés Promedio por País")
-        country_stress = df.groupby("Country")["Stress_Level"].mean().reset_index()
-        fig = px.bar(country_stress, x="Country", y="Stress_Level",
-                     title="Estrés Promedio por País",
-                     color="Stress_Level", color_continuous_scale="Reds_r")
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.subheader("Riesgo de Burnout por País")
-        burnout_by_country = df.groupby(["Country", "Burnout_Risk"]).size().reset_index(name="Count")
-        fig = px.bar(burnout_by_country, x="Country", y="Count", color="Burnout_Risk",
-                     title="Distribución de Burnout por País",
-                     barmode="group")
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    st.subheader("Modo de Trabajo por País")
-    workmode_by_country = df.groupby(["Country", "Work_Mode"]).size().reset_index(name="Count")
-    fig = px.bar(workmode_by_country, x="Country", y="Count", color="Work_Mode",
-                 title="Modo de Trabajo por País", barmode="group")
-    fig.update_layout(xaxis_tickangle=-45)
-    st.plotly_chart(fig, use_container_width=True)
 
-def frequency_tables_page(df):
-    st.title("📋 Tablas de Frecuencia")
-    st.markdown("---")
-    
-    st.subheader("Distribución por Género")
-    gender_freq = df["Gender"].value_counts()
-    gender_df = pd.DataFrame({
-        "Género": gender_freq.index,
-        "Frecuencia": gender_freq.values,
-        "Porcentaje": (gender_freq.values / len(df) * 100).round(2)
-    })
-    st.table(gender_df)
-    
+    # Vista general
+    st.subheader("📊 Información General del Dataset")
     col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Distribución por Industria")
-        industry_freq = df["Industry"].value_counts()
-        industry_df = pd.DataFrame({
-            "Industria": industry_freq.index,
-            "Frecuencia": industry_freq.values,
-            "Porcentaje": (industry_freq.values / len(df) * 100).round(2)
-        })
-        st.table(industry_df)
-    
-    with col2:
-        st.subheader("Distribución por Modo de Trabajo")
-        workmode_freq = df["Work_Mode"].value_counts()
-        workmode_df = pd.DataFrame({
-            "Modo de Trabajo": workmode_freq.index,
-            "Frecuencia": workmode_freq.values,
-            "Porcentaje": (workmode_freq.values / len(df) * 100).round(2)
-        })
-        st.table(workmode_df)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Distribución por Riesgo de Burnout")
-        burnout_freq = df["Burnout_Risk"].value_counts()
-        burnout_df = pd.DataFrame({
-            "Riesgo de Burnout": burnout_freq.index,
-            "Frecuencia": burnout_freq.values,
-            "Porcentaje": (burnout_freq.values / len(df) * 100).round(2)
-        })
-        st.table(burnout_df)
-    
-    with col2:
-        st.subheader("Distribución por Nivel de Productividad")
-        prod_level_freq = df["productivity_level"].value_counts()
-        prod_level_df = pd.DataFrame({
-            "Nivel de Productividad": prod_level_freq.index,
-            "Frecuencia": prod_level_freq.values,
-            "Porcentaje": (prod_level_freq.values / len(df) * 100).round(2)
-        })
-        st.table(prod_level_df)
-    
-    st.subheader("Distribución por País")
-    country_freq = df["Country"].value_counts()
-    country_df = pd.DataFrame({
-        "País": country_freq.index,
-        "Frecuencia": country_freq.values,
-        "Porcentaje": (country_freq.values / len(df) * 100).round(2)
-    })
-    st.table(country_df)
-    
-    st.subheader("Acceso a Apoyo de Salud Mental")
-    support_freq = df["Mental_Health_Support_Access"].value_counts()
-    support_df = pd.DataFrame({
-        "Acceso a Apoyo": support_freq.index,
-        "Frecuencia": support_freq.values,
-        "Porcentaje": (support_freq.values / len(df) * 100).round(2)
-    })
-    st.table(support_df)
 
-def predictive_analysis_page(df):
+    with col1:
+        st.metric("Filas", df.shape[0])
+        st.metric("Columnas", df.shape[1])
+
+    with col2:
+        st.write("**Variables:**")
+        st.write(", ".join(df.columns.tolist()))
+
+    # Estadísticas descriptivas
+    st.subheader("📈 Estadísticas Descriptivas")
+    numeric_df = df.select_dtypes(include=["int64", "float64"])
+    st.dataframe(numeric_df.describe().round(2), use_container_width=True)
+
+    # Distribuciones
+    st.subheader("📉 Distribuciones de Variables Numéricas")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        fig_age = px.histogram(df, x="Age", nbins=20, title="Edad")
+        st.plotly_chart(fig_age, use_container_width=True)
+
+    with col2:
+        fig_work = px.histogram(df, x="Work_Hours_Per_Week", nbins=15, title="Horas Trabajadas por Semana")
+        st.plotly_chart(fig_work, use_container_width=True)
+
+    with col3:
+        fig_sleep = px.histogram(df, x="Sleep_Hours", nbins=15, title="Horas de Sueño")
+        st.plotly_chart(fig_sleep, use_container_width=True)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        fig_stress = px.histogram(df, x="Stress_Level", nbins=10, title="Nivel de Estrés")
+        st.plotly_chart(fig_stress, use_container_width=True)
+
+    with col2:
+        fig_prod = px.histogram(df, x="Productivity_Score", nbins=20, title="Score de Productividad")
+        st.plotly_chart(fig_prod, use_container_width=True)
+
+    with col3:
+        fig_activity = px.histogram(df, x="Physical_Activity_Hours", nbins=15, title="Actividad Física (horas)")
+        st.plotly_chart(fig_activity, use_container_width=True)
+
+    # Análisis categórico
+    st.subheader("📊 Distribución de Variables Categóricas")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        gender_counts = df["Gender"].value_counts()
+        fig_gender = px.pie(values=gender_counts.values, names=gender_counts.index, title="Distribución por Género")
+        st.plotly_chart(fig_gender, use_container_width=True)
+
+    with col2:
+        burnout_counts = df["Burnout_Risk"].value_counts()
+        fig_burnout = px.pie(values=burnout_counts.values, names=burnout_counts.index, title="Riesgo de Burnout")
+        st.plotly_chart(fig_burnout, use_container_width=True)
+
+    with col3:
+        support_counts = df["Mental_Health_Support_Access"].value_counts()
+        fig_support = px.pie(values=support_counts.values, names=support_counts.index, title="Acceso a Soporte Mental")
+        st.plotly_chart(fig_support, use_container_width=True)
+
+    # Análisis cruzado
+    st.subheader("📈 Análisis Cruzado: Estrés vs Productividad")
+    cross_tab = pd.crosstab(df["Stress_Level"], df["productivity_level"], normalize="index") * 100
+    st.dataframe(cross_tab.round(2), use_container_width=True)
+
+    # Work mode analysis
+    st.subheader("💼 Análisis por Modalidad de Trabajo")
+    work_mode_stats = df.groupby("Work_Mode")[["Stress_Level", "Productivity_Score", "Sleep_Hours"]].mean().round(2)
+    st.dataframe(work_mode_stats, use_container_width=True)
+
+# ==================== ANÁLISIS PREDICTIVO ====================
+elif page == "Análisis Predictivo":
     st.title("🔮 Análisis Predictivo")
     st.markdown("---")
-    
-    st.markdown("""
-    Este módulo permite predecir la **Puntuación de Productividad** basándose en diferentes variables.
-    El modelo utiliza algoritmos de Machine Learning para encontrar patrones en los datos.
+
+    st.info("""
+    Esta sección presenta correlaciones y patrones identificados que pueden servir
+    como base para modelos predictivos de productividad y salud mental.
     """)
-    
-    col1, col2 = st.columns([1, 2])
-    
+
+    # Correlación con productividad
+    numeric_cols = ["Age", "Work_Hours_Per_Week", "Stress_Level", "Sleep_Hours",
+                    "Productivity_Score", "Physical_Activity_Hours"]
+    corr_with_productivity = df[numeric_cols].corr()["Productivity_Score"].sort_values()
+
+    st.subheader("📊 Correlación con Productividad")
+    fig_corr_prod = px.bar(
+        x=corr_with_productivity.values,
+        y=corr_with_productivity.index,
+        orientation='h',
+        title="Correlación de Variables con Productividad",
+        color=corr_with_productivity.values,
+        color_continuous_scale="RdYlBu",
+        range_color=[-1, 1]
+    )
+    fig_corr_prod.update_layout(yaxis_title="Variable", xaxis_title="Correlación")
+    st.plotly_chart(fig_corr_prod, use_container_width=True)
+
+    # Insights
+    st.subheader("💡 Insights Principales")
+
+    col1, col2 = st.columns(2)
+
     with col1:
-        st.subheader("Configuración del Modelo")
-        
-        model_type = st.selectbox("Tipo de Modelo", ["Random Forest", "Regresión Lineal"])
-        
-        st.markdown("### Variables de Entrada para Predicción")
-        
-        age_input = st.number_input("Edad", min_value=22, max_value=59, value=35)
-        stress_input = st.slider("Nivel de Estrés (1-10)", 1, 10, 5)
-        sleep_input = st.number_input("Horas de Sueño", min_value=4.0, max_value=10.0, value=7.0, step=0.5)
-        work_hours_input = st.number_input("Horas de Trabajo/Semana", min_value=30, max_value=64, value=40)
-        physical_activity_input = st.number_input("Horas de Actividad Física/Semana", min_value=0.0, max_value=10.0, value=3.0, step=0.5)
-        
-        predict_button = st.button("🔮 Predecir Productividad", type="primary")
-    
+        st.success("** Factores Positivos para Productividad:**")
+        st.write("- Más horas de sueño → mayor productividad")
+        st.write("- Mayor actividad física → mejor rendimiento")
+        st.write("- Menor nivel de estrés → mayor productividad")
+
     with col2:
-        features = ["Age", "Stress_Level", "Sleep_Hours", "Work_Hours_Per_Week", "Physical_Activity_Hours"]
-        
-        X = df[features]
-        y = df["Productivity_Score"]
-        
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        if model_type == "Random Forest":
-            model = RandomForestRegressor(n_estimators=100, random_state=42)
-        else:
-            model = LinearRegression()
-        
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        
-        r2 = r2_score(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        
-        st.subheader("Métricas del Modelo")
-        
-        col_m1, col_m2, col_m3 = st.columns(3)
-        
-        with col_m1:
-            st.metric("R² Score", f"{r2:.4f}")
-        with col_m2:
-            st.metric("MAE", f"{mae:.2f}")
-        with col_m3:
-            st.metric("RMSE", f"{rmse:.2f}")
-        
-        if predict_button:
-            input_data = pd.DataFrame({
-                "Age": [age_input],
-                "Stress_Level": [stress_input],
-                "Sleep_Hours": [sleep_input],
-                "Work_Hours_Per_Week": [work_hours_input],
-                "Physical_Activity_Hours": [physical_activity_input]
-            })
-            
-            prediction = model.predict(input_data)[0]
-            
-            st.success(f"### Predicción de Productividad: {prediction:.1f}")
-        
-        st.subheader("Importancia de Características")
-        
-        if model_type == "Random Forest":
-            importance_df = pd.DataFrame({
-                "Feature": features,
-                "Importance": model.feature_importances_
-            }).sort_values("Importance", ascending=True)
-            
-            fig = px.bar(importance_df, x="Importance", y="Feature",
-                        title="Importancia de Características (Random Forest)",
-                        orientation="h", color="Importance", color_continuous_scale="Viridis")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            coef_df = pd.DataFrame({
-                "Feature": features,
-                "Coefficient": model.coef_
-            }).sort_values("Coefficient", ascending=True)
-            
-            fig = px.bar(coef_df, x="Coefficient", y="Feature",
-                        title="Coeficientes del Modelo (Regresión Lineal)",
-                        orientation="h", color="Coefficient", color_continuous_scale="RdBu_r")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        st.subheader("Predicciones vs Valores Reales")
-        
-        results_df = pd.DataFrame({
-            "Valor Real": y_test.values,
-            "Predicción": y_pred
-        }).head(20)
-        
-        fig = px.scatter(results_df, x="Valor Real", y="Predicción",
-                        title="Predicciones vs Valores Reales",
-                        trendline="ols")
-        fig.add_shape(type="line", x0=y_test.min(), y0=y_test.min(), 
-                     x1=y_test.max(), y1=y_test.max(),
-                     line=dict(color="red", dash="dash"))
-        st.plotly_chart(fig, use_container_width=True)
+        st.error("** Factores Negativos para Productividad:**")
+        st.write("- Más horas de trabajo semanal → menor productividad (rendimientos decrecientes)")
+        st.write("- Mayor estrés → scores más bajos")
+        st.write("- Burnout risk alto → desempeño reducido")
 
-def main():
-    df = load_data()
-    
-    st.sidebar.title("🧠 Mental Health & Productivity")
-    st.sidebar.markdown("---")
-    
-    pages = {
-        "🏠 Inicio": "home",
-        "📊 Resumen de Datos": "data_overview",
-        "📈 Gráficos Descriptivos": "descriptive_graphics",
-        "🗺️ Mapa Geográfico": "geographic_map",
-        "📋 Tablas de Frecuencia": "frequency_tables",
-        "🔍 Filtros": "filters",
-        "🔮 Análisis Predictivo": "predictive_analysis"
-    }
-    
-    selected_page = st.sidebar.radio("Navegación", list(pages.keys()))
-    
-    filtered_df = apply_filters(df)
-    
-    st.sidebar.markdown("---")
-    st.sidebar.info(f"📊 Registros mostrados: {len(filtered_df)} / {len(df)}")
-    
-    page = pages[selected_page]
-    
-    if page == "home":
-        home_page()
-    elif page == "data_overview":
-        data_overview_page(filtered_df)
-    elif page == "descriptive_graphics":
-        descriptive_graphics_page(filtered_df)
-    elif page == "geographic_map":
-        geographic_map_page(filtered_df)
-    elif page == "frequency_tables":
-        frequency_tables_page(filtered_df)
-    elif page == "filters":
-        st.title("🔍 Filtros Activos")
-        st.markdown("---")
-        st.write("Los filtros se aplican en tiempo real a través del panel lateral.")
-        st.write("Todos los gráficos y tablas reflejan los datos filtrados.")
-        st.markdown("### Resumen de Filtros Aplicados")
-        st.dataframe(filtered_df.describe(), use_container_width=True)
-        st.subheader("Datos Filtrados")
-        st.dataframe(filtered_df.head(100), use_container_width=True)
-    elif page == "predictive_analysis":
-        predictive_analysis_page(filtered_df)
+    # Scatter matrix
+    st.subheader("🔬 Matriz de Dispersión")
+    st.markdown("Explora relaciones entre múltiples variables simultáneamente.")
 
-if __name__ == "__main__":
-    main()
+    selected_vars = st.multiselect(
+        "Selecciona variables para la matriz:",
+        numeric_cols,
+        default=["Stress_Level", "Sleep_Hours", "Productivity_Score", "Work_Hours_Per_Week"]
+    )
+
+    if len(selected_vars) >= 2:
+        fig_scatter_matrix = px.scatter_matrix(
+            df,
+            dimensions=selected_vars,
+            color="productivity_level",
+            title="Matriz de Dispersión por Nivel de Productividad"
+        )
+        st.plotly_chart(fig_scatter_matrix, use_container_width=True)
+
+    # Predicción simple basada en reglas
+    st.subheader("🎯 Clasificación por Reglas Simples")
+    st.markdown("""
+    Basado en el análisis, se pueden establecer reglas para predecir productividad:
+    - **Alta productividad**: Stress_Level ≤ 4, Sleep_Hours ≥ 7, Productivity_Score ≥ 70
+    - **Baja productividad**: Stress_Level ≥ 7, Sleep_Hours ≤ 6, Productivity_Score ≤ 50
+    """)
+
+    # Simulación de predicción
+    def classify_productivity(row):
+        if row["Productivity_Score"] >= 70 and row["Stress_Level"] <= 4 and row["Sleep_Hours"] >= 7:
+            return "Alta (predicho)"
+        elif row["Productivity_Score"] <= 50 and row["Stress_Level"] >= 7 and row["Sleep_Hours"] <= 6:
+            return "Baja (predicho)"
+        else:
+            return "Media (predicho)"
+
+    df["predicted_level"] = df.apply(classify_productivity, axis=1)
+
+    accuracy = (df["predicted_level"].str.split().str[0] == df["productivity_level"]).mean()
+    st.write(f"**Precisión aproximada de reglas simples:** {accuracy:.1%}")
+
+# ==================== ORQUESTACIÓN DE DATOS ====================
+elif page == "Orquestación de Datos":
+    st.title("🔧 Orquestación de Datos - Pipeline ETL")
+    st.markdown("---")
+
+    st.subheader("📋 Arquitectura del Pipeline")
+
+    st.markdown("""
+    El proceso ETL (Extract, Transform, Load) implementado sigue la siguiente arquitectura:
+    """)
+
+    # Diagrama del pipeline
+    st.image("dag.png", caption="Diagrama del Pipeline ETL", use_column_width=True)
+
+    # Explicación detallada
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("### 📥 Extracción")
+        st.markdown("""
+        - **Fuente**: Dataset desde Kaggle
+        - **Archivo**: `mental_health_productivity_2026.csv`
+        - **Formato**: CSV
+        - **Método**: Descarga mediante `kagglehub`
+        - **Tamaño**: 1500 registros, 13 columnas
+        """)
+
+    with col2:
+        st.markdown("### ⚙️ Transformación")
+        st.markdown("""
+        - **Limpieza**: Eliminación de valores nulos (`dropna()`)
+        - **Validación**: Revisión de tipos de datos
+        - **Derivación**: Creación de `productivity_level`
+          - Baja: 0-40
+          - Media: 41-70
+          - Alta: 71-100
+        """)
+
+    with col3:
+        st.markdown("### 💾 Carga")
+        st.markdown("""
+        - **Archivo destino**: `cleaned_dataset.csv`
+        - **Ubicación**: `./data/`
+        - **Formato**: CSV sin índice
+        - **Uso**: Input para Streamlit app
+        - **Estado**: Listo para análisis
+        """)
+
+    # Código del ETL
+    st.subheader("📜 Código del Proceso ETL")
+    st.code("""
+# ET = EXTRACCIÓN + TRANSFORMACIÓN
+# L = CARGA
+
+import pandas as pd
+
+# EXTRACCIÓN
+df = pd.read_csv("mental_health_productivity_2026.csv")
+
+# TRANSFORMACIÓN
+# 1. Eliminar nulos
+df = df.dropna()
+
+# 2. Crear variable derivada
+df["productivity_level"] = pd.cut(
+    df["Productivity_Score"],
+    bins=[0, 40, 70, 100],
+    labels=["Baja", "Media", "Alta"]
+)
+
+# CARGA
+df.to_csv("cleaned_dataset.csv", index=False)
+    """, language="python")
+
+    # Flujo de datos
+    st.subheader("🔄 Flujo de Datos")
+    st.markdown("""
+    ```
+    Kaggle Dataset → Extracción → Limpieza → Feature Engineering → Dataset Limpio → Streamlit App
+         .csv              ↓         ↓             ↓                  .csv              ↓
+    (raw data)      (1500 x 13)  (sin nulos)  (+1 columna derivada)  (listo)      (visualización)
+    ```""")
+
+    # Programación del pipeline (simulación Airflow)
+    st.subheader("🛩️ Simulación con Apache Airflow")
+    st.markdown("""
+    El DAG `mental_health_etl` consta de las siguientes tareas:
+
+    ```python
+    from airflow import DAG
+    from airflow.operators.python import PythonOperator
+    from datetime import datetime
+
+    def extract_data():
+        # Descargar desde Kaggle
+        pass
+
+    def clean_data():
+        # Eliminar nulos, tipos correctos
+        pass
+
+    def feature_engineering():
+        # Crear productivity_level
+        pass
+
+    def load_data():
+        # Guardar cleaned_dataset.csv
+        pass
+
+    with DAG('mental_health_etl', start_date=datetime(2024,1,1)) as dag:
+        t1 = PythonOperator(task_id='extract_data', python_callable=extract_data)
+        t2 = PythonOperator(task_id='clean_data', python_callable=clean_data)
+        t3 = PythonOperator(task_id='feature_engineering', python_callable=feature_engineering)
+        t4 = PythonOperator(task_id='load_data', python_callable=load_data)
+
+        t1 >> t2 >> t3 >> t4
+    ```
+    """)
+
+    st.success("El pipeline se ejecuta diariamente para actualizar el dataset limpio.")
+
+    # ==================== EJERCICIOS DE ORQUESTACIÓN (AIRFLOW) ====================
+    st.markdown("---")
+    st.subheader("✈️ Ejercicios de Orquestación (Airflow)")
+
+    # EJERCICIO 1
+    st.markdown("### 📘 Ejercicio 1: Pipeline Secuencial Simple")
+    st.markdown("""
+    **Objetivo:** Ejecutar tres tareas en secuencia estricta: extraer datos, limpiarlos y cargarlos.
+    
+    **Aplicación al proyecto:** Este flujo básico representa el proceso mínimo para obtener un dataset 
+    utilizable. Primero se extrae el CSV original desde Kaggle, luego se eliminan los valores nulos, 
+    y finalmente se guarda el archivo limpio para su posterior análisis en la app Streamlit.
+    """)
+
+    st.code("""
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime, timedelta
+
+def extract_data():
+    '''
+    Tarea 1: Extraer el dataset desde Kaggle.
+    Simula la descarga de mental_health_productivity_2026.csv
+    '''
+    import kagglehub
+    path = kagglehub.dataset_download("shadab80k/mental-health-productivity-2026")
+    print(f"Dataset descargado en: {path}")
+
+def clean_data():
+    '''
+    Tarea 2: Limpiar datos eliminando nulos.
+    Lee el archivo descargado y elimina filas con valores faltantes.
+    '''
+    import pandas as pd
+    df = pd.read_csv("mental_health_productivity_2026.csv")
+    df_clean = df.dropna()
+    print(f"Registros originales: {len(df)}")
+    print(f"Registros después de limpieza: {len(df_clean)}")
+    df_clean.to_csv("temp_clean.csv", index=False)
+
+def load_data():
+    '''
+    Tarea 3: Cargar el dataset limpio a la carpeta data/.
+    Mueve el archivo procesado a su ubicación final.
+    '''
+    import shutil
+    shutil.move("temp_clean.csv", "data/cleaned_dataset.csv")
+    print("Dataset limpio guardado en data/cleaned_dataset.csv")
+
+# Definición del DAG
+with DAG(
+    dag_id='mental_health_pipeline_simple',
+    description='Pipeline ETL secuencial simple',
+    schedule_interval=timedelta(days=1),
+    start_date=datetime(2024, 1, 1),
+    catchup=False
+) as dag:
+    
+    t1 = PythonOperator(
+        task_id='extract_data',
+        python_callable=extract_data,
+        doc_md="Extrae dataset desde Kaggle"
+    )
+    
+    t2 = PythonOperator(
+        task_id='clean_data',
+        python_callable=clean_data,
+        doc_md="Limpia valores nulos del dataset"
+    )
+    
+    t3 = PythonOperator(
+        task_id='load_data',
+        python_callable=load_data,
+        doc_md="Guarda dataset limpio en data/"
+    )
+    
+    #Flujo secuencial: t1 -> t2 -> t3
+    t1 >> t2 >> t3
+    """, language="python")
+
+    st.info("""
+    **Relación con el proyecto:**
+    - `extract_data` → Descarga el CSV original (1500 empleados × 13 columnas)
+    - `clean_data` → Elimina nulos (en este caso no hay,但 genera el archivo limpio)
+    - `load_data` → Genera `cleaned_dataset.csv` que consume `app.py`
+    """)
+
+    # EJERCICIO 2
+    st.markdown("---")
+    st.markdown("### 📘 Ejercicio 2: Pipeline con Feature Engineering")
+    st.markdown("""
+    **Objetivo:** Incorporar una etapa de transformación avanzada que cree nuevas variables derivadas.
+    
+    **Aplicación al proyecto:** Este pipeline añade la creación de `productivity_level`, una variable 
+    categórica derivada de `Productivity_Score` que clasifica a los empleados en Baja, Media y Alta 
+    productividad. Esta variable es clave para el análisis predictivo y los filtros interactivos de la app.
+    """)
+
+    st.code("""
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime, timedelta
+import pandas as pd
+
+def extract_data():
+    '''Extraer dataset desde Kaggle'''
+    import kagglehub
+    path = kagglehub.dataset_download("shadab80k/mental-health-productivity-2026")
+    df = pd.read_csv(path + "/mental_health_productivity_2026.csv")
+    df.to_csv("raw_data.csv", index=False)
+    print("Extracción completada: raw_data.csv")
+
+def clean_data():
+    '''Limpiar datos y validar tipos'''
+    df = pd.read_csv("raw_data.csv")
+    
+    # Eliminar nulos
+    df_clean = df.dropna()
+    
+    # Validar tipos (opcional pero recomendado)
+    numeric_cols = ['Age', 'Work_Hours_Per_Week', 'Stress_Level', 
+                    'Sleep_Hours', 'Productivity_Score', 'Physical_Activity_Hours']
+    for col in numeric_cols:
+        df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+    
+    df_clean.to_csv("clean_data.csv", index=False)
+    print("Limpieza completada: clean_data.csv")
+
+def feature_engineering():
+    '''
+    Crear variable derivada productivity_level.
+    Bins: 0-40 → Baja, 41-70 → Media, 71-100 → Alta
+    '''
+    df = pd.read_csv("clean_data.csv")
+    
+    # Crear categoría de productividad
+    df["productivity_level"] = pd.cut(
+        df["Productivity_Score"],
+        bins=[0, 40, 70, 100],
+        labels=["Baja", "Media", "Alta"]
+    ).astype(str)
+    
+    df.to_csv("features_data.csv", index=False)
+    print("Feature engineering completado: productivity_level creada")
+    print("Distribución:")
+    print(df["productivity_level"].value_counts())
+
+def load_data():
+    '''Cargar dataset final a data/'''
+    import shutil
+    shutil.move("features_data.csv", "data/cleaned_dataset.csv")
+    print("Carga completada: data/cleaned_dataset.csv listo para Streamlit")
+
+with DAG(
+    dag_id='mental_health_etl_with_features',
+    description='Pipeline ETL con ingeniería de características',
+    schedule_interval=timedelta(days=1),
+    start_date=datetime(2024, 1, 1),
+    catchup=False
+) as dag:
+    
+    extract = PythonOperator(
+        task_id='extract_data',
+        python_callable=extract_data
+    )
+    
+    clean = PythonOperator(
+        task_id='clean_data',
+        python_callable=clean_data
+    )
+    
+    fe = PythonOperator(
+        task_id='feature_engineering',
+        python_callable=feature_engineering
+    )
+    
+    load = PythonOperator(
+        task_id='load_data',
+        python_callable=load_data
+    )
+    
+    # Flujo: extract -> clean -> feature_engineering -> load
+    extract >> clean >> fe >> load
+    """, language="python")
+
+    st.success("""
+    **Variable creada:** `productivity_level` (categórica: Baja/Media/Alta)
+    
+    **Uso en la app:** 
+    - Filtros en Dashboard
+    - Gráficos por nivel de productividad
+    - Análisis predictivo por categoría
+    """)
+
+    # EJERCICIO 3
+    st.markdown("---")
+    st.markdown("### 📘 Ejercicio 3: Pipeline con Tareas Paralelas")
+    st.markdown("""
+    **Objetivo:** Ejecutar múltiples transformaciones en paralelo para optimizar tiempo de procesamiento.
+    
+    **Aplicación al proyecto:** Después de la limpieza, se pueden ejecutar en paralelo:
+    
+    1. **feature_engineering** → Crea `productivity_level` (bins de productividad)
+    2. **validation** → Valida rangos de variables (Stress 1-10, Sleep 0-24, etc.)
+    3. **data_quality_check** → Verifica consistencia (ej. Work_Hours no > 168/semana)
+    
+    Ambas tareas deben completarse antes de cargar el dataset final. Esto reduce el tiempo total 
+    del pipeline si la validación es costosa (ej. cientos de reglas de negocio).
+    """)
+
+    st.code("""
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime, timedelta
+import pandas as pd
+
+def extract_data():
+    '''Tarea 1: Extraer datos (sin cambios)'''
+    import kagglehub
+    path = kagglehub.dataset_download("shadab80k/mental-health-productivity-2026")
+    df = pd.read_csv(path + "/mental_health_productivity_2026.csv")
+    df.to_csv("raw_data.csv", index=False)
+
+def clean_data():
+    '''Tarea 2: Limpiar datos (sin cambios)'''
+    df = pd.read_csv("raw_data.csv")
+    df_clean = df.dropna()
+    df_clean.to_csv("clean_data.csv", index=False)
+
+def feature_engineering():
+    '''Tarea 3A (paralela): Crear productividad_level'''
+    df = pd.read_csv("clean_data.csv")
+    df["productivity_level"] = pd.cut(
+        df["Productivity_Score"],
+        bins=[0, 40, 70, 100],
+        labels=["Baja", "Media", "Alta"]
+    ).astype(str)
+    df.to_csv("with_features.csv", index=False)
+    print("Feature engineering completado")
+
+def validation():
+    '''Tarea 3B (paralela): Validar rangos de variables clave'''
+    df = pd.read_csv("clean_data.csv")
+    
+    errors = []
+    
+    # Validaciones
+    if (df["Stress_Level"] < 1).any() or (df["Stress_Level"] > 10).any():
+        errors.append("Stress_Level fuera de rango [1-10]")
+    
+    if (df["Sleep_Hours"] < 0).any() or (df["Sleep_Hours"] > 24).any():
+        errors.append("Sleep_Hours fuera de rango [0-24]")
+    
+    if (df["Work_Hours_Per_Week"] > 168).any():
+        errors.append("Work_Hours_Per_Week excede 168 hrs/semana")
+    
+    if (df["Productivity_Score"] < 0).any() or (df["Productivity_Score"] > 100).any():
+        errors.append("Productivity_Score fuera de rango [0-100]")
+    
+    if errors:
+        raise ValueError(f"Errores de validación: {errors}")
+    else:
+        print("✅ Todas las validaciones pasaron")
+    
+    # Copiar archivo limpio para el merge
+    df.to_csv("validated_data.csv", index=False)
+
+def merge_and_load():
+    '''Tarea 4: Combinar resultados y cargar (después de Paralelas)'''
+    import shutil
+    
+    # Leer datos con features
+    df_fe = pd.read_csv("with_features.csv")
+    
+    # En un caso real, podríamos hacer merge si validation modifica datos
+    # Aquí ambos producen el mismo df limpio, verification es solo checks
+    
+    # Si validation pasó, usamos el archivo con features
+    df_fe.to_csv("data/cleaned_dataset.csv", index=False)
+    shutil.copy("validated_data.csv", "data/validation_log.csv")
+    
+    print("Carga completada: dataset final con features")
+
+with DAG(
+    dag_id='mental_health_parallel_pipeline',
+    description='Pipeline ETL con tareas paralelas',
+    schedule_interval=timedelta(days=1),
+    start_date=datetime(2024, 1, 1),
+    catchup=False
+) as dag:
+    
+    # Tarea 1: Extracción
+    extract = PythonOperator(
+        task_id='extract_data',
+        python_callable=extract_data
+    )
+    
+    # Tarea 2: Limpieza
+    clean = PythonOperator(
+        task_id='clean_data',
+        python_callable=clean_data
+    )
+    
+    # Tarea 3A: Feature Engineering (paralela)
+    fe_task = PythonOperator(
+        task_id='feature_engineering',
+        python_callable=feature_engineering
+    )
+    
+    # Tarea 3B: Validación (paralela a FE)
+    validation_task = PythonOperator(
+        task_id='validation',
+        python_callable=validation
+    )
+    
+    # Tarea 4: Carga (después de AMBAS paralelas)
+    load = PythonOperator(
+        task_id='load_data',
+        python_callable=merge_and_load
+    )
+    
+    # Dependencias:
+    # extract >> clean >> [fe_task, validation_task] >> load
+    extract >> clean
+    clean >> [fe_task, validation_task]  # Paralelo
+    fe_task >> load
+    validation_task >> load
+    """, language="python")
+
+    st.info("""
+    ** Beneficios de paralelización:**
+    - `feature_engineering` y `validation` se ejecutan simultáneamente
+    - Si `validation` tarda 30s y `feature_engineering` tarda 20s, el bloque paralelo 
+      toma ~30s (no 50s), reduciendo tiempo total del pipeline
+    - Útil cuando se agregan múltiples transformaciones o validaciones complejas
+    
+    **Aplicación real en proyecto:**
+    - `feature_engineering` → Crea `productivity_level`
+    - `validation` → Revisa rangos de Stress_Level (1-10), Sleep_Hours (0-24), etc.
+    - Ambas deben pasar antes de cargar el dataset final que consume Streamlit
+    """)
+
+    st.markdown("---")
+    st.subheader("🎯 Resumen de Ejercicios")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("""
+        **Ejercicio 1: Secuencial**
+        - 3 tareas en línea
+        - Más simple, fácil de debuggear
+        - Tiempo: T1 + T2 + T3
+        """)
+
+    with col2:
+        st.markdown("""
+        **Ejercicio 2: Con FE**
+        - 4 tareas secuenciales
+        - Incluye feature engineering
+        - Crea `productivity_level`
+        """)
+
+    with col3:
+        st.markdown("""
+        **Ejercicio 3: Paralelo**
+        - 4 tareas con branching
+        - `clean` → `[FE + validation]` → `load`
+        - Optimiza tiempo de ejecución
+        """)
+
+st.sidebar.markdown("---")
+st.sidebar.info("""
+**Proyecto:** Ingeniería de Datos  
+**Tema:** Mental Health & Productivity  
+**Estudiante:** Mariana Gutierrez
+""")
